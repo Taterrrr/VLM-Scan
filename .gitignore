@@ -1,0 +1,5 @@
+venv/
+.vscode/
+.continue/
+docs/
+sensitive/
