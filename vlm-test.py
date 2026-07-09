@@ -33,31 +33,75 @@ def ask_vlm(image_path):
                 "content":
                 """
                 Extract:
-                - patient name
-                - claim number
-                - each amount the patient is responsible for
+                - all_human_names
+                - claim_number
+                - procedure_blocks
                 - evidence (including row and column number of table, if present) of all reported data
 
-                JSON Schema:
+                NOTE:
+                A procedure block is an object containing three key features: the ADA code of the procedure, the corresponding amount that was paid by the insurance provider, and the 3-digit EOB code for this procedure.
+
+                General JSON Schema:
 
                 {
-                    "field name": {
+                    "(field name)": {
                         "value": "X",
                         "evidence": [
                         {
                             "table": "X",
                             "row": "X",
-                            "column": "X"
+                            "column": "X",
+                            "page_location_relative": "X"
                         }
                         ]
                     }
                 }
 
-                Return a VALID JSON BLOCK, followed by a hashtag on a new line. Additional comments may come anywhere after the hashtag.
+                Procedure Block Json Schema:
+                {
+                    "count": "X",
+                    "values": [
+                    {
+                        "ada_code": "X",
+                        "amt_paid": "X",
+                        "eob_code": "X"
+                    }
+                    ]
+                }
 
-                NOTES:
-                Patient name must not be Jason Barganier, or similar.     
-                If any field is blank or cannot be identified, report the contents as null. 
+                Human Names Schema:
+                {
+                    "ranked_names": [
+                    {
+                        "name": "X",
+                        "confidence": "X%",
+                        "reasoning": "Why this name is likely the patient name",
+                        "evidence": [
+                        {
+                            "table": "X",
+                            "row": "X",
+                            "column": "X",
+                            "page_location_relative": "X"
+                        }
+                        ]
+                    }
+                    ]
+                }
+
+                Return a VALID JSON BLOCK, followed by a hashtag on a new line. The hashtag should fall after all JSON is complete. Additional comments may come anywhere after the hashtag.
+
+                NOTES: 
+                This is an Explanation of Benefits (EOB) document from an insurance provider.   
+                If any field is blank or cannot be identified, report the contents as null.
+                Be specific and extract values exactly as they appear on the document.
+                Ensure amt_paid is NOT the amount the patient is responsible for. There will be a specific row or column labeled "AMOUNT PAID" or similar -- Find amt_paid there.
+                
+                Human Names Ranking Guidelines:
+                - Look for names near "Patient:", "Name:", "Patient Name:", or similar labels
+                - Names in the header/top of the document are more likely to be the patient
+                - Names in billing/payment sections are less likely to be the patient
+                - Consider names that appear with addresses or contact information
+                - Rank by proximity to patient-related labels and document section context
                 """,
                 "images":[image]
             }
@@ -70,7 +114,6 @@ def ask_vlm(image_path):
     return response["message"]["content"]
 
 
-#image = pdf_to_image("sensitive/page-25.pdf")
 
 image = 'sensitive/EOB/page-25.png'
 
