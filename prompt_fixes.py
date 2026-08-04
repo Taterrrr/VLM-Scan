@@ -1,0 +1,1 @@
+too_many_tables_united = """The last pass on this image failed because too many claim objects were extracted. Remember: each table is a unified claim object."""

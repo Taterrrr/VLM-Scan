@@ -4,6 +4,7 @@
 
 * Use Amt. Paid as insurance amount
 * Use Codes to identify for audits
+* Make sorting system with specific prompts
 
 # Needs checking system -- PDF to .md?
 
