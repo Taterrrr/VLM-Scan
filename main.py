@@ -57,7 +57,7 @@ def syntax_check(response):
     except KeyError:
         raise custom_errors.ClaimsNameError
 
-    allowed = {"patient_name", "claim_number", "ada_codes"}
+    allowed = {"claim_number", "ada_codes"}
     if not set(response["claims"][0]).issubset(allowed):
         raise custom_errors.KeysNameError
 
@@ -111,64 +111,68 @@ def ask_vlm(image_path, prompt):
 
     return responsedumped, total_ollama_time, response.message.content
 
-
-image = 'sensitive/EOB/page-25.png'
-
-blackout = black_out_column(image, 1885, 2070)
-cv2.imwrite("sensitive/EOB/blackout.png", blackout)
-
-#quit()
-
-tryagain = 0                    #RUN VLM BLOCK
-retry = True
-fixmessage = ""
-while retry:
-    retry = False
-    if fixmessage != "":
-        print("Fixmessage triggered.")
-        tryagain += 1
-        if tryagain == 3:
-            raise custom_errors.RetryLimitExceededError("Too many retries")
-    try:
-        result, time_taken, result_raw = ask_vlm("sensitive/EOB/blackout.png", (prompts_list.message_2_united + (fixmessage if fixmessage != "" else "")))
-        fixmessage = ""
-    except custom_errors.TooManyTablesError:
-        retry = True
-        fixmessage = prompt_fixes.too_many_tables_united
-        print("Too many tables.")
-    except custom_errors.NoResponseError:
-        retry = True
-    except custom_errors.KeysNameError:
-        retry = True
-        fixmessage = prompt_fixes.stick_to_script
-        print("Claims keys mislabeled.")
-    except custom_errors.ClaimsNameError:                                                 
-        retry = True
-        fixmessage = prompt_fixes.stick_to_script
-        print("Claims dict mislabeled.")
-    except custom_errors.NotDictError:
-        retry = True
-        fixmessage = prompt_fixes.stick_to_script
-        print("Not a dict.")
-
-                                #VLM NOW COMPLETE
+def main(file):
     
+    image = file
 
+    blackout = black_out_column(image, 1885, 2070)
+    cv2.imwrite("sensitive/EOB/blackout.png", blackout)
+
+    #quit()
+
+    tryagain = 0                    #RUN VLM BLOCK
+    retry = True
+    fixmessage = ""
+    while retry:
+        retry = False
+        if fixmessage != "":
+            print("Fixmessage triggered.")
+            tryagain += 1
+            if tryagain == 3:
+                raise custom_errors.RetryLimitExceededError("Too many retries")
+        try:
+            result, time_taken, result_raw = ask_vlm("sensitive/EOB/blackout.png", (prompts_list.message_2_united + (fixmessage if fixmessage != "" else "")))
+            fixmessage = ""
+        except custom_errors.TooManyTablesError:
+            retry = True
+            fixmessage = prompt_fixes.too_many_tables_united
+            print("Too many tables.")
+        except custom_errors.NoResponseError:
+            retry = True
+        except custom_errors.KeysNameError:
+            retry = True
+            fixmessage = prompt_fixes.stick_to_script
+            print("Claims keys mislabeled.")
+        except custom_errors.ClaimsNameError:                                                 
+            retry = True
+            fixmessage = prompt_fixes.stick_to_script
+            print("Claims dict mislabeled.")
+        except custom_errors.NotDictError:
+            retry = True
+            fixmessage = prompt_fixes.stick_to_script
+            print("Not a dict.")
+
+                                    #VLM NOW COMPLETE
         
 
+    claims_list = []
+    for obj in result["claims"]:
+        claims_list.append(obj)        
 
-print(f"VLM OUT: \n{result_raw}")
-print(f"Debug stats: {'Retries: ' + str(tryagain) if tryagain else ''}" if tryagain else "")  #fill once debug variables known
-print(f"Time Taken: {time_taken:.2f} seconds.")
-print(f"Tables: {len(result["claims"])}")
+                                    ##DEBUG SECTION
+    print(f"VLM OUT: \n{result_raw}")
+    print(f"Debug stats: {'Retries: ' + str(tryagain) if tryagain else ''}" if tryagain else "")  #fill once debug variables known
+    print(f"Time Taken: {time_taken:.2f} seconds.")
+    print(f"Tables: {len(result["claims"])}")
+                                    ##DEBUG SECTION
 
-# Append result to a new file in the vlm_out folder
-#os.makedirs("vlm_out", exist_ok=True)
-filename = f"claim_{result["claims"][0]["claim_number"]["value"]}.txt"
-filepath = os.path.join("vlm_out", filename)
-with open(filepath, "a") as f:
-    f.write(result)
-print(f"Result appended to: {filepath}")
+    for obj in claims_list:
+        filename = f"claim_{obj["claim_number"]}.json"
+        filepath = os.path.join("vlm_out", filename)
+        with open(filepath, "w") as f:
+            json.dump(result, f, indent=4)
+
+        print(f"Result written to: {filepath}")
 
 
 

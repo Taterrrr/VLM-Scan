@@ -90,13 +90,10 @@ message_2_united =     """
                 Analyze this EOB (Explanation of Benefits) document and extract all claim data. Each table contains a separate claim.
 
                 For each claim, extract:
-                - patient_name
                 - claim_number
                 - ada_codes
                     - alphanumeric_code
                     - amount_paid
-                - evidence (including table number, row and column number of table, if present) of all reported data --- numbering of table rows and columns begins at one. Header rows count as row 1.
-
                 
                 TABLE IDENTIFICATION:
                 - Number tables sequentially from top to bottom: table 1, table 2, table 3, etc.
@@ -106,7 +103,7 @@ message_2_united =     """
                 Before extracting data:
                 1. Identify every separate claim table on the page.
                 2. Count the tables.
-                3. Then extract every table independently.
+                3. Extract every table independently.
                 Do not merge information between tables.
 
                 OUTPUT FORMAT - Array of Claim Objects:
@@ -115,40 +112,11 @@ message_2_united =     """
                 {
                     "claims": [
                         {
-                            "patient_name": {
-                                "value": "X",
-                                "evidence": {
-                                    "table": "table X",
-                                    "row": "X",
-                                    "column": "X"
-                                }
-                            },
-                            "claim_number": {
-                                "value": "X",
-                                "evidence": {
-                                    "table": "table X",
-                                    "row": "X",
-                                    "column": "X"
-                                }
-                            },
+                            "claim_number": "X",
                             "ada_codes": [
                                 {
-                                    "alphanumeric_code": {
-                                        "value": "X",
-                                        "evidence": {
-                                            "table": "table X",
-                                            "row": "X",
-                                            "column": "X"
-                                        }
-                                    },
-                                    "amount_paid":{
-                                        "value": "X",
-                                        "evidence": {
-                                            "table": "table X",
-                                            "row": "X",
-                                            "column": "X"
-                                        }
-                                    }
+                                    "alphanumeric_code": "X",
+                                    "amount_paid": "X"
                                 }
                             ]
                         }
@@ -160,7 +128,6 @@ message_2_united =     """
                 - Return ALL claims found in the image, each in its own object within the "claims" array
                 - If a field is blank or cannot be identified, report the "value", "table", "column", and "row" fields as null.
                 - Be specific and extract values exactly as they appear on the document. Do not infer uncertain values from unassociated rows, columns, or tables.
-                - There will be a specific column labeled "AMOUNT PAID". Find amount_paid there and nowhere else. DO NOT EXTRACT FROM "PATIENT RESP".
+                - There will be a specific column labeled "AMOUNT PAID". Find amount_paid there and nowhere else.
                 - The claim number will be the final string of digits in row 2, column 1 of any given claim table.
-
                 """
