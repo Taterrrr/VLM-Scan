@@ -14,6 +14,13 @@ def compare_payment(filepath: str, database: str):
         for code in codebook:
             dcode = code["alphanumeric_code"]
             amtpaid= code["amount_paid"]
+            for truecode in databason:
+                if truecode == code:
+                    if amtpaid == databason[truecode]:
+                        #VALID PAYMENT --- make a list of valid codes
+                    else:
+                        
+
             ###NOW COMPARE AMT PAID TO THE PROPER AMT BY CODE###
 
 
