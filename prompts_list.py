@@ -130,4 +130,5 @@ message_2_united =     """
                 - Be specific and extract values exactly as they appear on the document. Do not infer uncertain values from unassociated rows, columns, or tables.
                 - There will be a specific column labeled "AMOUNT PAID". Find amount_paid there and nowhere else.
                 - The claim number will be the final string of digits in row 2, column 1 of any given claim table.
+                - If a claim appears to have no claims, do not include it in the final output.
                 """

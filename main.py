@@ -9,11 +9,11 @@ import time
 import prompts_list
 import cv2
 import json
+from pathlib import Path
 
 import prompt_fixes
 import custom_errors
 
-pretend = True
 '''
 def pdf_to_image(pdf_path):
     doc = fitz.open(pdf_path)
@@ -111,6 +111,54 @@ def ask_vlm(image_path, prompt):
 
     return responsedumped, total_ollama_time, response.message.content
 
+
+def compare_payment(filepath: str, database: str):
+    with open(filepath, "r") as f:
+        filejson = json.load(f)
+
+    with open(database, "r") as f:
+        databason = json.load(f)
+
+    claimbook = filejson["claims"]
+
+    output_dir = "tattletale_out"
+
+    for claim in claimbook:
+        cnum = claim["claim_number"]
+        discrepancies = []
+
+        for code in claim["ada_codes"]:
+            dcode = code["alphanumeric_code"]
+            amtpaid = float(code["amount_paid"])
+
+            if dcode in databason:
+                expected = float(databason[dcode])
+
+                if amtpaid != expected:
+                    discrepancy = amtpaid - expected
+
+                    result = {
+                        "claim_number": cnum,
+                        "ada_code": dcode,
+                        "amount_paid": amtpaid,
+                        "expected_amount": expected,
+                        "discrepancy": discrepancy
+                    }
+
+                    discrepancies.append(result)
+                    print(f"DISCREPANCY FOUND: {result}")
+
+        # Create one JSON file per claim, including its discrepancies
+        output_file = f"{output_dir}/claim_{cnum}.json"
+
+        with open(output_file, "w") as f:
+            json.dump({
+                "claim_number": cnum,
+                "discrepancies": discrepancies
+            }, f, indent=4)
+
+        print(f"Saved {output_file} ({len(discrepancies)} discrepancies)")
+
 def main(file):
     
     image = file
@@ -172,7 +220,15 @@ def main(file):
         with open(filepath, "w") as f:
             json.dump(result, f, indent=4)
 
-        print(f"Result written to: {filepath}")
+        print(f"AI result written to: {filepath}")
 
+    vlmOutputDir = Path("vlm_out")
+    for filepath in vlmOutputDir.iterdir():
+        if "cleaned" not in filepath():
+            compare_payment(filepath, "databases/codes_base_proj1.json")
+            
+main("sensitive/EOB/page-35.png")
+    
 
+####BIG BUGS
 
