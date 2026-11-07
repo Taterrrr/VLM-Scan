@@ -129,7 +129,7 @@ def compare_payment(filepath: str, database: str):
 
         for code in claim["ada_codes"]:
             dcode = code["alphanumeric_code"]
-            amtpaid = float(code["amount_paid"])
+            amtpaid = float(code["amount_paid"].replace("$", ""))
 
             if dcode in databason:
                 expected = float(databason[dcode])
@@ -223,12 +223,24 @@ def main(file):
         print(f"AI result written to: {filepath}")
 
     vlmOutputDir = Path("vlm_out")
-    for filepath in vlmOutputDir.iterdir():
-        if "cleaned" not in filepath():
-            compare_payment(filepath, "databases/codes_base_proj1.json")
+    postComparisonDir = Path("post_comparison")
+    
+    # Create post_comparison directory if it doesn't exist
+    postComparisonDir.mkdir(exist_ok=True)
+    
+    # Process files from both vlm_out and movess directories
+    for source_dir in [vlmOutputDir]:
+        if source_dir.exists():
+            for filepath in source_dir.iterdir():
+                if filepath.is_file():
+                    compare_payment(filepath, "databases/codes_base_proj1.json")
+                    
+                    # Move processed file to post_comparison directory
+                    dest_path = postComparisonDir / filepath.name
+                    import shutil
+                    shutil.move(str(filepath), str(dest_path))
+                    print(f"Moved {filepath} to {dest_path}")
             
 main("sensitive/EOB/page-35.png")
-    
 
-####BIG BUGS
 

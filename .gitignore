@@ -4,5 +4,5 @@ venv/
 docs/
 sensitive/
 .clineignore
-vlm_out/
+processing/
 databases/
