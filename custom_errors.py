@@ -32,3 +32,7 @@ class NotDictError(VLMError):
 class KeysNameError(VLMError):
     """Raised when claims keys are incorrectly named."""
     pass
+
+class EmptyDocumentError(VLMError):
+    """Raised when document is empty."""
+    pass

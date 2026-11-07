@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import os
 
 
@@ -100,12 +100,14 @@ def ask_vlm(image_path, prompt):
         }
     )
 
+    if not response.message.content:
+            raise custom_errors.NoResponseError("VLM output empty")
+    
     responsedumped = parse_vlm_output(response.message.content)
     end_time = time.perf_counter()
     total_ollama_time = end_time - ollama_start
 
-    if not response.message.content:
-        raise custom_errors.NoResponseError("VLM output empty")     #error raising
+         #error raising
     syntax_check(responsedumped)
     
 
@@ -114,50 +116,48 @@ def ask_vlm(image_path, prompt):
 
 def compare_payment(filepath: str, database: str):
     with open(filepath, "r") as f:
-        filejson = json.load(f)
+        claimbook = json.load(f)
 
     with open(database, "r") as f:
         databason = json.load(f)
 
-    claimbook = filejson["claims"]
 
-    output_dir = "tattletale_out"
+    output_dir = "processing/tattletale_out"
 
-    for claim in claimbook:
-        cnum = claim["claim_number"]
-        discrepancies = []
+    cnum = claimbook["claim_number"]
+    discrepancies = []
 
-        for code in claim["ada_codes"]:
-            dcode = code["alphanumeric_code"]
-            amtpaid = float(code["amount_paid"].replace("$", ""))
+    for code in claimbook["ada_codes"]:
+        readcode = code["alphanumeric_code"]
+        amtpaid = float(code["amount_paid"].replace("$", ""))
 
-            if dcode in databason:
-                expected = float(databason[dcode])
+        if readcode in databason:
+            expected = float(databason[readcode])
 
-                if amtpaid != expected:
-                    discrepancy = amtpaid - expected
+            if amtpaid != expected:
+                discrepancy = amtpaid - expected
 
-                    result = {
-                        "claim_number": cnum,
-                        "ada_code": dcode,
-                        "amount_paid": amtpaid,
-                        "expected_amount": expected,
-                        "discrepancy": discrepancy
-                    }
+                result = {
+                    "claim_number": cnum,
+                    "ada_code": readcode,
+                    "amount_paid": amtpaid,
+                    "expected_amount": expected,
+                    "discrepancy": discrepancy
+                }
 
-                    discrepancies.append(result)
-                    print(f"DISCREPANCY FOUND: {result}")
+                discrepancies.append(result)
+                ##print(f"DISCREPANCY FOUND: {result}")
 
-        # Create one JSON file per claim, including its discrepancies
-        output_file = f"{output_dir}/claim_{cnum}.json"
+    # Create one JSON file per claim, including its discrepancies
+    output_file = f"{output_dir}/{filepath.name}"
 
-        with open(output_file, "w") as f:
-            json.dump({
-                "claim_number": cnum,
-                "discrepancies": discrepancies
-            }, f, indent=4)
+    with open(output_file, "w") as f:
+        json.dump({
+            "claim_number": cnum,
+            "discrepancies": (discrepancies if discrepancies else "None")
+        }, f, indent=4)
 
-        print(f"Saved {output_file} ({len(discrepancies)} discrepancies)")
+    print(f"Saved {output_file} ({len(discrepancies)} discrepancies)")
 
 def main(file):
     
@@ -204,8 +204,12 @@ def main(file):
         
 
     claims_list = []
-    for obj in result["claims"]:
-        claims_list.append(obj)        
+    if result["claims"]:
+        for obj in result["claims"]:
+            claims_list.append(obj)
+    else: 
+        raise custom_errors.EmptyDocumentError("Document is empty.")  
+
 
                                     ##DEBUG SECTION
     print(f"VLM OUT: \n{result_raw}")
@@ -215,32 +219,32 @@ def main(file):
                                     ##DEBUG SECTION
 
     for obj in claims_list:
-        filename = f"claim_{obj["claim_number"]}.json"
-        filepath = os.path.join("vlm_out", filename)
+        now = datetime.now()
+        filename = f"claim_{obj["claim_number"]}_{now.year}-{now.month}-{now.day}_{now.hour}-{now.minute}-{now.second}.json"
+        filepath = os.path.join("processing/vlm_out", filename)
         with open(filepath, "w") as f:
-            json.dump(result, f, indent=4)
+            json.dump(obj, f, indent=4)
 
         print(f"AI result written to: {filepath}")
 
-    vlmOutputDir = Path("vlm_out")
-    postComparisonDir = Path("post_comparison")
+    vlmOutputDir = Path("processing/vlm_out")
+    postComparisonDir = Path("processing/post_comparison")
     
-    # Create post_comparison directory if it doesn't exist
-    postComparisonDir.mkdir(exist_ok=True)
     
-    # Process files from both vlm_out and movess directories
-    for source_dir in [vlmOutputDir]:
-        if source_dir.exists():
-            for filepath in source_dir.iterdir():
-                if filepath.is_file():
-                    compare_payment(filepath, "databases/codes_base_proj1.json")
-                    
-                    # Move processed file to post_comparison directory
-                    dest_path = postComparisonDir / filepath.name
-                    import shutil
-                    shutil.move(str(filepath), str(dest_path))
-                    print(f"Moved {filepath} to {dest_path}")
+    # Process files from both processing/vlm_out and movess directories
+    for filepath in vlmOutputDir.iterdir():
+        if filepath.is_file():
+            compare_payment(filepath, "databases/codes_base_proj1.json")
             
-main("sensitive/EOB/page-35.png")
+            # Move processed file to processing/post_comparison directory
+            dest_path = postComparisonDir / filepath.name
+            import shutil
+            shutil.move(str(filepath), str(dest_path))
+            print(f"Moved {filepath} to {dest_path}")
+
+try:            
+    main("sensitive/EOB/page-25.png")
+except custom_errors.EmptyDocumentError:
+    print("No valid claims can be detected within the document.")
 
 
