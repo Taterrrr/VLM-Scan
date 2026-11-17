@@ -73,45 +73,98 @@ def parse_vlm_output(response):
     #print(json_string)
     return json.loads(json_string)
 
-def ask_vlm(image_path, prompt):
-    if not prompt:
-        raise custom_errors.MissingInputError("Missing prompt for VLM input")
-    elif not image_path:
-        raise custom_errors.MissingInputError("Missing image for VLM input")
-    
+VLM_MODEL = "qwen3-vl:8b"
+VLM_NUM_CTX = 8192
+
+
+def encode_image(image_path):
+    """Return the base64 string of an image file."""
     with open(image_path, "rb") as f:
-        image = base64.b64encode(
+        return base64.b64encode(
             f.read()
         ).decode()
 
 
-    ollama_start = time.perf_counter()
-    response = ollama.chat(
-        model="qwen3-vl:8b",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt,
-                "images":[image]
-            }
-        ],
-        options={
-        'num_ctx': 8192
+def start_vlm_session(image_path, prompt, model=VLM_MODEL):
+    """Build the message list for the very first pass over an image."""
+    return [
+        {
+            "role": "user",
+            "content": prompt,
+            "images": [encode_image(image_path)]
         }
-    )
+    ]
 
-    if not response.message.content:
-            raise custom_errors.NoResponseError("VLM output empty")
-    
-    responsedumped = parse_vlm_output(response.message.content)
-    end_time = time.perf_counter()
-    total_ollama_time = end_time - ollama_start
 
-         #error raising
-    syntax_check(responsedumped)
-    
+def ask_vlm(image_path, prompt, history=None, model=VLM_MODEL, num_ctx=VLM_NUM_CTX):
+    """Ask the VLM about an image, optionally continuing an earlier conversation.
 
-    return responsedumped, total_ollama_time, response.message.content
+    First pass: call with image_path + prompt. The returned message history can
+    be kept and handed back in on a second pass.
+
+    Second pass: call again with history=<the returned history> and only the new
+    prompt (image_path may then be None). The image and every earlier turn are
+    resent byte-for-byte identical, so ollama matches its cached prompt prefix
+    and answers off the existing KV cache instead of re-running the vision scan.
+
+    Returns (parsed_json, seconds_taken, raw_text, message_history).
+    """
+    if not prompt:
+        raise custom_errors.MissingInputError("Missing prompt for VLM input")
+    elif not history and not image_path:
+        raise custom_errors.MissingInputError("Missing image for VLM input")
+
+    if history:
+        # follow-up prompt: reuse the already-cached image + conversation prefix
+        messages = [dict(msg) for msg in history]
+        messages.append({
+            "role": "user",
+            "content": prompt
+        })
+    else:
+        messages = start_vlm_session(image_path, prompt)
+
+    try:
+        ollama_start = time.perf_counter()
+        response = ollama.chat(
+            model=model,
+            messages=messages,
+            options={
+            'num_ctx': num_ctx
+            }
+        )
+        end_time = time.perf_counter()
+        total_ollama_time = end_time - ollama_start
+
+        if not response.message.content:
+                raise custom_errors.NoResponseError("VLM output empty")
+
+        responsedumped = parse_vlm_output(response.message.content)
+
+             #error raising
+        syntax_check(responsedumped)
+    except Exception as err:
+        # hand the conversation back even on failure, so the retry can continue
+        # from the same image instead of paying for a fresh vision scan
+        err.vlm_messages = messages
+        raise
+
+    # keep the reply in the history so the next prompt lines up exactly with the
+    # tokens ollama has already processed
+    messages.append({
+        "role": "assistant",
+        "content": response.message.content
+    })
+
+    return responsedumped, total_ollama_time, response.message.content, messages
+
+
+def follow_up_vlm(history, prompt, model=VLM_MODEL, num_ctx=VLM_NUM_CTX):
+    """Send a second (or later) prompt about the image already in history."""
+    if not history:
+        raise custom_errors.MissingInputError("Missing history for follow-up prompt")
+
+    return ask_vlm(None, prompt, history=history, model=model, num_ctx=num_ctx)
 
 
 def compare_payment(filepath: str, database: str):
@@ -171,6 +224,7 @@ def main(file):
     tryagain = 0                    #RUN VLM BLOCK
     retry = True
     fixmessage = ""
+    history = None                  #one conversation over the image, kept warm in the KV cache
     while retry:
         retry = False
         if fixmessage != "":
@@ -179,23 +233,33 @@ def main(file):
             if tryagain == 3:
                 raise custom_errors.RetryLimitExceededError("Too many retries")
         try:
-            result, time_taken, result_raw = ask_vlm("sensitive/EOB/blackout.png", (prompts_list.message_2_united + (fixmessage if fixmessage != "" else "")))
+            if history:
+                #second pass on the same image: only the fixmessage is new, the
+                #image and every earlier turn come off the KV cache
+                result, time_taken, result_raw, history = follow_up_vlm(history, fixmessage)
+            else:
+                result, time_taken, result_raw, history = ask_vlm("sensitive/EOB/blackout.png", prompts_list.message_2_united)
             fixmessage = ""
-        except custom_errors.TooManyTablesError:
+        except custom_errors.TooManyTablesError as err:
+            history = getattr(err, "vlm_messages", history)
             retry = True
             fixmessage = prompt_fixes.too_many_tables_united
             print("Too many tables.")
-        except custom_errors.NoResponseError:
+        except custom_errors.NoResponseError as err:
+            history = getattr(err, "vlm_messages", history)
             retry = True
-        except custom_errors.KeysNameError:
+        except custom_errors.KeysNameError as err:
+            history = getattr(err, "vlm_messages", history)
             retry = True
             fixmessage = prompt_fixes.stick_to_script
             print("Claims keys mislabeled.")
-        except custom_errors.ClaimsNameError:                                                 
+        except custom_errors.ClaimsNameError as err:                                                 
+            history = getattr(err, "vlm_messages", history)
             retry = True
             fixmessage = prompt_fixes.stick_to_script
             print("Claims dict mislabeled.")
-        except custom_errors.NotDictError:
+        except custom_errors.NotDictError as err:
+            history = getattr(err, "vlm_messages", history)
             retry = True
             fixmessage = prompt_fixes.stick_to_script
             print("Not a dict.")
@@ -248,3 +312,4 @@ except custom_errors.EmptyDocumentError:
     print("No valid claims can be detected within the document.")
 
 
+##current goal -- detect type of doc, then use KV cache persistence to ask the VLM without rerunning scan
