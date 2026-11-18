@@ -133,3 +133,30 @@ message_2_united =     """
                 - If a claim appears to have no codes, do not include the claim in the final output.
                 - If the image appears to have no claims, return an empty "claims" array.
                 """
+
+what_provider = """
+Analyze this EOB (Explanation of Benefits) document. You are tasked with determing the company which created it.
+If the document contains either of these two things, you may classify it using what is found. If not, other methods of classification are as described below.
+
+Method 1: Watermarks
+Look in the top left corner. The document may contain one of two things: either a watermark that contains "UnitedHealthcare", or a logo with "PAI" written on it. PAI stands for Planned Administrators Inc. Classify the documents according to their watermark.
+
+METHOD 2: Color Coding
+Documents from UnitedHealthcare will contain little to no color. All elements will be either black, white, or gray. Documents from PAI, however, use a blue-and-gray color scheme. Elements from PAI will often be either blue or gray. Classify accordingly.
+
+METHOD 3: Shape Coding
+Documents from UnitedHealthcare use square edges on and within most elements. Documents from PAI, however, will use a rounded scheme. Elements in a PAI document will often have rounded edges, mixed with some square. Classify accordingly.
+
+Attempt to use each method as needed.
+Finding the provider is the goal; however, if each method fails to determine the correct classification, none_found may be a necessary output. 
+
+OUTPUT STRUCTURE: Output a single phrase. All letters must be lowercase. Do not include any whitespace, punctuation or newlines, other than the underscore included in the example. The word should follow the classification of the document. It may be any of these three:
+
+united_health
+planned_admin
+none_found
+
+Do not output anything besides exactly ONE of the listed phrases.
+"""
+
+message_3_pai = """"""

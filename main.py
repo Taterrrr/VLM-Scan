@@ -138,11 +138,14 @@ def ask_vlm(image_path, prompt, history=None, model=VLM_MODEL, num_ctx=VLM_NUM_C
 
         if not response.message.content:
                 raise custom_errors.NoResponseError("VLM output empty")
-
-        responsedumped = parse_vlm_output(response.message.content)
+        #print(response.message.content)
+        if history:                                                         #only parses 2nd run and beyond (1st is not JSON)
+            responsedumped = parse_vlm_output(response.message.content)
 
              #error raising
-        syntax_check(responsedumped)
+            syntax_check(responsedumped)
+        else: 
+            responsedumped = response.message.content
     except Exception as err:
         # hand the conversation back even on failure, so the retry can continue
         # from the same image instead of paying for a fresh vision scan
@@ -212,6 +215,18 @@ def compare_payment(filepath: str, database: str):
 
     print(f"Saved {output_file} ({len(discrepancies)} discrepancies)")
 
+def select_prompt(vlmspeak):
+    returnedprompt = None
+    trueword = str(vlmspeak).strip().lower()
+    #print(trueword)
+    if trueword == "united_health":
+        returnedprompt = prompts_list.message_2_united
+    elif trueword == "planned_admin":
+        returnedprompt = prompts_list.message_3_pai
+
+    return returnedprompt
+
+
 def main(file):
     
     image = file
@@ -236,9 +251,12 @@ def main(file):
             if history:
                 #second pass on the same image: only the fixmessage is new, the
                 #image and every earlier turn come off the KV cache
-                result, time_taken, result_raw, history = follow_up_vlm(history, fixmessage)
+                result, time_taken, result_raw, history = follow_up_vlm(history, selected_prompt + fixmessage)
+                retry = False
             else:
-                result, time_taken, result_raw, history = ask_vlm("sensitive/EOB/blackout.png", prompts_list.message_2_united)
+                result, time_taken, result_raw, history = ask_vlm("sensitive/EOB/blackout.png", prompts_list.what_provider)
+                retry = True
+                selected_prompt = select_prompt(result)
             fixmessage = ""
         except custom_errors.TooManyTablesError as err:
             history = getattr(err, "vlm_messages", history)
