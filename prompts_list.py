@@ -1,5 +1,8 @@
 #July 11; first prompt
-message_1_all=  """      
+
+message_1_all = """this is a testing prompt. respond with 'hi'."""
+
+message_1_all_temp=  """      
                 Analyze this EOB (Explanation of Benefits) document and extract all claim data. Each table contains a separate claim.
 
                 For each claim, extract:
@@ -96,6 +99,8 @@ message_2_united =     """
                 - If a claim appears to have no codes, do not include the claim in the final output.
                 - If the image appears to have no claims, return an empty "claims" array.
                 """
+
+image_intake = """Analyze this EOB (Explanation of Benefits) document. You will be given an instruction to analyze it in future prompts. Return one word (lowercase, no punctuation): ready"""
 
 what_provider = """
 Analyze this EOB (Explanation of Benefits) document. You are tasked with determing the company which created it.

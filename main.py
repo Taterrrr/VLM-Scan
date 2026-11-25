@@ -13,7 +13,7 @@ import prompt_fixes
 import custom_errors
 
 
-def pdf_to_images(pdf_path: str | Path, output_folder: str = "processing/pre_bucket" | Path, dpi: int = 300) -> list[Path]:
+def pdf_to_images(pdf_path: str | Path, output_folder: str = "processing/pre_bucket", dpi: int = 300) -> list[Path]:
     """
     Render every page in a PDF as a PNG image.
 
@@ -167,12 +167,12 @@ def ask_vlm(image_path, prompt, history=None, model=VLM_MODEL, num_ctx=VLM_NUM_C
     return responsedumped, total_ollama_time, response.message.content, messages
 
 
-def follow_up_vlm(history, prompt, model=VLM_MODEL, num_ctx=VLM_NUM_CTX):
+def follow_up_vlm(history, prompt, model=VLM_MODEL, num_ctx=VLM_NUM_CTX, imagepath = None):
     """Send a second (or later) prompt about the image already in history."""
     if not history:
         raise custom_errors.MissingInputError("Missing history for follow-up prompt")
 
-    return ask_vlm(None, prompt, history=history, model=model, num_ctx=num_ctx)
+    return ask_vlm(imagepath, prompt, history=history, model=model, num_ctx=num_ctx)
 
 
 def compare_payment(filepath: str, database: str):
@@ -228,16 +228,17 @@ def select_prompt(vlmspeak):
         returnedprompt = prompts_list.message_2_united
     elif trueword == "planned_admin":
         returnedprompt = prompts_list.message_3_pai
+    else:
+        raise custom_errors.DocumentTypeError('Invalid provider given')
 
     return returnedprompt
 
 
-def main(file):
+def main(file: list[Path]):
     try:         
-        image = file
-
-        blackout = black_out_column(image, 1885, 2070)
-        cv2.imwrite("sensitive/EOB/blackout.png", blackout)
+        image_list = pdf_to_images(file)
+        #blackout = black_out_column(image, 1885, 2070)
+        #cv2.imwrite("sensitive/EOB/blackout.png", blackout)
 
         #quit()
 
@@ -252,17 +253,19 @@ def main(file):
                 tryagain += 1
                 if tryagain == 3:
                     raise custom_errors.RetryLimitExceededError("Too many retries")
+                fixmessage = ""
             try:
                 if history:
                     #second pass on the same image: only the fixmessage is new, the
                     #image and every earlier turn come off the KV cache
-                    result, time_taken, result_raw, history = follow_up_vlm(history, selected_prompt + fixmessage)
+                    for run in range(len(image_list)-1):
+                        result, time_taken, result_raw, history = follow_up_vlm(history, prompts_list.image_intake, imagepath = image_list[run])
+                    result, time_taken, result_raw, history = follow_up_vlm(history, prompts_list.message_1_all + fixmessage)
                     retry = False
                 else:
-                    result, time_taken, result_raw, history = ask_vlm("sensitive/EOB/blackout.png", prompts_list.what_provider)
+                    result, time_taken, result_raw, history = ask_vlm(image_list[0], prompts_list.image_intake)
                     retry = True
-                    selected_prompt = select_prompt(result)
-                fixmessage = ""
+                    #selected_prompt = select_prompt(result)
             except custom_errors.TooManyTablesError as err:
                 history = getattr(err, "vlm_messages", history)
                 retry = True
@@ -330,11 +333,14 @@ def main(file):
                 print(f"Moved {filepath} to {dest_path}")
     except custom_errors.EmptyDocumentError:
         print("No valid claims can be detected within the document.")
-    except:
-        print("An error occurred during processing")
+    #except Exception as e:
+       # print("An error occurred during processing")
+       # print(e)
 '''
 try:            
     main("sensitive/EOB/page-25.png")
 except custom_errors.EmptyDocumentError:
     print("No valid claims can be detected within the document.")
 '''
+
+#Check errors in main() most are gonna get in the way now

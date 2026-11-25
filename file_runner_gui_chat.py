@@ -120,9 +120,7 @@ class FileProcessingThread(QThread):
             self.file_started.emit(file_path)
 
             try:
-                image_list = main.pdf_to_images(file_path)
-                for path in image_list:
-                    main.main(path) 
+                main.main(file_path) 
                 completed += 1
             except Exception:
                 errors.append(
@@ -239,7 +237,6 @@ class FileRunnerWindow(QWidget):
                 "Finished",
                 f"Finished processing {completed} file(s).",
             )
-
 
 def launch_file_runner() -> int:
     app = QApplication(sys.argv)

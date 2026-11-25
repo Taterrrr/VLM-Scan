@@ -36,3 +36,7 @@ class KeysNameError(VLMError):
 class EmptyDocumentError(VLMError):
     """Raised when document is empty."""
     pass
+
+class DocumentTypeError(VLMError):
+    """Raised when document has invalid provider"""
+    pass
