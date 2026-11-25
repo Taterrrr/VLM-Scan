@@ -13,7 +13,7 @@ import prompt_fixes
 import custom_errors
 
 
-def pdf_to_images(pdf_path: str | Path, output_folder: str = "processing/pre_bucket", dpi: int = 300) -> list[Path]:
+def pdf_to_images(pdf_path: str | Path, output_folder: str = "processing/pre_bucket", dpi: int = 180) -> list[Path]:
     """
     Render every page in a PDF as a PNG image.
 
@@ -35,7 +35,7 @@ def pdf_to_images(pdf_path: str | Path, output_folder: str = "processing/pre_buc
 
     return image_paths
     
-def black_out_column(image, x_start, x_end):
+def black_out_column(image, x_start, x_end):   #deprecated
     """
     Black out a vertical column in an image.
 
