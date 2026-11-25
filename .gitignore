@@ -6,3 +6,4 @@ sensitive/
 .clineignore
 processing/
 databases/
+__pycache__/

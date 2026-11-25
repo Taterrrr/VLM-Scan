@@ -1,8 +1,6 @@
 from datetime import datetime
 import os
-
-
-'''import fitz'''
+import fitz
 import ollama
 import base64
 import time
@@ -14,21 +12,28 @@ from pathlib import Path
 import prompt_fixes
 import custom_errors
 
-'''
-def pdf_to_image(pdf_path):
-    doc = fitz.open(pdf_path)
 
-    page = doc[0]
+def pdf_to_images(pdf_path: str | Path, output_folder: str = "processing/pre_bucket" | Path, dpi: int = 300) -> list[Path]:
+    """
+    Render every page in a PDF as a PNG image.
 
-    pix = page.get_pixmap(
-        dpi=300
-    )
+    Returns a list of the created image paths.
+    """
+    pdf_path = Path(pdf_path)
+    output_folder = Path(output_folder)
 
-    path = "sensitive/page.png"
-    pix.save(path)
+    zoom = dpi / 72  # PDFs use 72 points per inch
+    matrix = fitz.Matrix(zoom, zoom)
+    image_paths = []
 
-    return path
-'''
+    with fitz.open(pdf_path) as document:
+        for page_number, page in enumerate(document, start=1):
+            pixmap = page.get_pixmap(matrix=matrix, alpha=False)
+            image_path = output_folder / f"{pdf_path.stem}_page_{page_number:03d}.png"
+            pixmap.save(image_path)
+            image_paths.append(image_path)
+
+    return image_paths
     
 def black_out_column(image, x_start, x_end):
     """
@@ -228,106 +233,108 @@ def select_prompt(vlmspeak):
 
 
 def main(file):
-    
-    image = file
+    try:         
+        image = file
 
-    blackout = black_out_column(image, 1885, 2070)
-    cv2.imwrite("sensitive/EOB/blackout.png", blackout)
+        blackout = black_out_column(image, 1885, 2070)
+        cv2.imwrite("sensitive/EOB/blackout.png", blackout)
 
-    #quit()
+        #quit()
 
-    tryagain = 0                    #RUN VLM BLOCK
-    retry = True
-    fixmessage = ""
-    history = None                  #one conversation over the image, kept warm in the KV cache
-    while retry:
-        retry = False
-        if fixmessage != "":
-            print("Fixmessage triggered.")
-            tryagain += 1
-            if tryagain == 3:
-                raise custom_errors.RetryLimitExceededError("Too many retries")
-        try:
-            if history:
-                #second pass on the same image: only the fixmessage is new, the
-                #image and every earlier turn come off the KV cache
-                result, time_taken, result_raw, history = follow_up_vlm(history, selected_prompt + fixmessage)
-                retry = False
-            else:
-                result, time_taken, result_raw, history = ask_vlm("sensitive/EOB/blackout.png", prompts_list.what_provider)
+        tryagain = 0                    #RUN VLM BLOCK
+        retry = True
+        fixmessage = ""
+        history = None                  #one conversation over the image, kept warm in the KV cache
+        while retry:
+            retry = False
+            if fixmessage != "":
+                print("Fixmessage triggered.")
+                tryagain += 1
+                if tryagain == 3:
+                    raise custom_errors.RetryLimitExceededError("Too many retries")
+            try:
+                if history:
+                    #second pass on the same image: only the fixmessage is new, the
+                    #image and every earlier turn come off the KV cache
+                    result, time_taken, result_raw, history = follow_up_vlm(history, selected_prompt + fixmessage)
+                    retry = False
+                else:
+                    result, time_taken, result_raw, history = ask_vlm("sensitive/EOB/blackout.png", prompts_list.what_provider)
+                    retry = True
+                    selected_prompt = select_prompt(result)
+                fixmessage = ""
+            except custom_errors.TooManyTablesError as err:
+                history = getattr(err, "vlm_messages", history)
                 retry = True
-                selected_prompt = select_prompt(result)
-            fixmessage = ""
-        except custom_errors.TooManyTablesError as err:
-            history = getattr(err, "vlm_messages", history)
-            retry = True
-            fixmessage = prompt_fixes.too_many_tables_united
-            print("Too many tables.")
-        except custom_errors.NoResponseError as err:
-            history = getattr(err, "vlm_messages", history)
-            retry = True
-        except custom_errors.KeysNameError as err:
-            history = getattr(err, "vlm_messages", history)
-            retry = True
-            fixmessage = prompt_fixes.stick_to_script
-            print("Claims keys mislabeled.")
-        except custom_errors.ClaimsNameError as err:                                                 
-            history = getattr(err, "vlm_messages", history)
-            retry = True
-            fixmessage = prompt_fixes.stick_to_script
-            print("Claims dict mislabeled.")
-        except custom_errors.NotDictError as err:
-            history = getattr(err, "vlm_messages", history)
-            retry = True
-            fixmessage = prompt_fixes.stick_to_script
-            print("Not a dict.")
+                fixmessage = prompt_fixes.too_many_tables_united
+                print("Too many tables.")
+            except custom_errors.NoResponseError as err:
+                history = getattr(err, "vlm_messages", history)
+                retry = True
+            except custom_errors.KeysNameError as err:
+                history = getattr(err, "vlm_messages", history)
+                retry = True
+                fixmessage = prompt_fixes.stick_to_script
+                print("Claims keys mislabeled.")
+            except custom_errors.ClaimsNameError as err:                                                 
+                history = getattr(err, "vlm_messages", history)
+                retry = True
+                fixmessage = prompt_fixes.stick_to_script
+                print("Claims dict mislabeled.")
+            except custom_errors.NotDictError as err:
+                history = getattr(err, "vlm_messages", history)
+                retry = True
+                fixmessage = prompt_fixes.stick_to_script
+                print("Not a dict.")
 
-                                    #VLM NOW COMPLETE
-        
-
-    claims_list = []
-    if result["claims"]:
-        for obj in result["claims"]:
-            claims_list.append(obj)
-    else: 
-        raise custom_errors.EmptyDocumentError("Document is empty.")  
-
-
-                                    ##DEBUG SECTION
-    print(f"VLM OUT: \n{result_raw}")
-    print(f"Debug stats: {'Retries: ' + str(tryagain) if tryagain else ''}" if tryagain else "")  #fill once debug variables known
-    print(f"Time Taken: {time_taken:.2f} seconds.")
-    print(f"Tables: {len(result["claims"])}")
-                                    ##DEBUG SECTION
-
-    for obj in claims_list:
-        now = datetime.now()
-        filename = f"claim_{obj["claim_number"]}_{now.year}-{now.month}-{now.day}_{now.hour}-{now.minute}-{now.second}.json"
-        filepath = os.path.join("processing/vlm_out", filename)
-        with open(filepath, "w") as f:
-            json.dump(obj, f, indent=4)
-
-        print(f"AI result written to: {filepath}")
-
-    vlmOutputDir = Path("processing/vlm_out")
-    postComparisonDir = Path("processing/post_comparison")
-    
-    
-    # Process files from both processing/vlm_out and movess directories
-    for filepath in vlmOutputDir.iterdir():
-        if filepath.is_file():
-            compare_payment(filepath, "databases/codes_base_proj1.json")
+                                        #VLM NOW COMPLETE
             
-            # Move processed file to processing/post_comparison directory
-            dest_path = postComparisonDir / filepath.name
-            import shutil
-            shutil.move(str(filepath), str(dest_path))
-            print(f"Moved {filepath} to {dest_path}")
 
+        claims_list = []
+        if result["claims"]:
+            for obj in result["claims"]:
+                claims_list.append(obj)
+        else: 
+            raise custom_errors.EmptyDocumentError("Document is empty.")  
+
+
+                                        ##DEBUG SECTION
+        print(f"VLM OUT: \n{result_raw}")
+        print(f"Debug stats: {'Retries: ' + str(tryagain) if tryagain else ''}" if tryagain else "")  #fill once debug variables known
+        print(f"Time Taken: {time_taken:.2f} seconds.")
+        print(f"Tables: {len(result["claims"])}")
+                                        ##DEBUG SECTION
+
+        for obj in claims_list:
+            now = datetime.now()
+            filename = f"claim_{obj["claim_number"]}_{now.year}-{now.month}-{now.day}_{now.hour}-{now.minute}-{now.second}.json"
+            filepath = os.path.join("processing/vlm_out", filename)
+            with open(filepath, "w") as f:
+                json.dump(obj, f, indent=4)
+
+            print(f"AI result written to: {filepath}")
+
+        vlmOutputDir = Path("processing/vlm_out")
+        postComparisonDir = Path("processing/post_comparison")
+        
+        
+        # Process files from both processing/vlm_out and movess directories
+        for filepath in vlmOutputDir.iterdir():
+            if filepath.is_file():
+                compare_payment(filepath, "databases/codes_base_proj1.json")
+                
+                # Move processed file to processing/post_comparison directory
+                dest_path = postComparisonDir / filepath.name
+                import shutil
+                shutil.move(str(filepath), str(dest_path))
+                print(f"Moved {filepath} to {dest_path}")
+    except custom_errors.EmptyDocumentError:
+        print("No valid claims can be detected within the document.")
+    except:
+        print("An error occurred during processing")
+'''
 try:            
     main("sensitive/EOB/page-25.png")
 except custom_errors.EmptyDocumentError:
     print("No valid claims can be detected within the document.")
-
-
-##current goal -- detect type of doc, then use KV cache persistence to ask the VLM without rerunning scan
+'''
