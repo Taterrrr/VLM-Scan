@@ -1,13 +1,31 @@
 #July 11; first prompt
-
+#Nov 28; possibly working, needs testing and refinement. Check if payment includes patient additions.
 message_1_all = """
-Analyze this EOB (Explanation of Benefits) document and extract all claim data. Each table contains a separate claim.
+You are tasked with analyzing this EOB (Explanation of Benefits) document and extracting all relevant claim data.
+The purpose of this task is to determine, for each individual claim, how much an insurance company paid, and what they paid it for. Payments are organized by ADA code within any claim.
+The company may pay by combining patient payment (such as a co-pay) with actual company payment. In any such cases, report company payment as the sum of all amounts currently paid.
+EOBs are structured in the following way: there will be an alphanumeric ADA Code (ex. D0270), alongside the amount the insurance company is willing to cover.
+Documents do not follow any structure besides what is stated above; however, there are a few general rules:
+1. EOBs are often organized into three sections: a header, a body, and concluding notes
+2. The body of the document will almost always be organized into multiple tables.
+3. Any individual claim will usually be contained within either one entire table, or one singular row of a table.
+4. The amount the insurance company is willing to pay will fall near the end of a row. It will be directly below a label, found in row 1 labeled something similar to any of the following:
+    - COVERED AMOUNT
+    - PAID
+    - AMOUNT ELIGIBLE FOR COVERAGE
+    - PAYER PAID
+    - X COMPANY PAYS
+Documents will have differing structures, so context clues must be used.
+If you cannot determine which column contains the amount paid by the company for any given code, compare with the other columns. The total paid for an entire claim will be the sum of all the code payments.
+
+
 
 For each claim, extract:
 - claim_number
 - ada_codes
     - alphanumeric_code
     - amount_paid
+- patient_name
 
 TABLE IDENTIFICATION:
 - Number tables sequentially from top to bottom: table 1, table 2, table 3, etc.
@@ -15,10 +33,9 @@ TABLE IDENTIFICATION:
 - Each table will have its own claim number
 
 Before extracting data:
-1. Identify every separate claim table on the page.
-2. Count the tables.
-3. Extract every table independently.
-Do not merge information between tables.
+1. Identify every separate claim on the page.
+3. Extract every claim and ADA code independently.
+Do not merge information between claims or codes.
 
 OUTPUT FORMAT - Array of Claim Objects:
 Return a JSON object with a top-level "claims" array. Each element in the array represents ONE complete claim object from ONE table. Do not add any additional keys, fields, explanations, or markdown formatting. Structure the JSON as follows:
@@ -42,59 +59,9 @@ KEY REQUIREMENTS:
 - Return ALL claims found in the image, each in its own object within the "claims" array
 - If a field is blank or cannot be identified, report the field as null.
 - Be specific and extract values exactly as they appear on the document. Do not infer uncertain values from unassociated rows, columns, or tables.
-- There will be a specific column labeled "AMOUNT PAID". Find amount_paid there and nowhere else.
-- The claim number will be the final string of digits in row 2, column 1 of any given claim table.
 - If a claim appears to have no codes, do not include the claim in the final output.
 - If the image appears to have no claims, return an empty "claims" array.
 """
-
-message_1_all_temp=  """      
-                Analyze this EOB (Explanation of Benefits) document and extract all claim data. Each table contains a separate claim.
-
-                For each claim, extract:
-                - claim_number
-                - ada_codes
-                    - alphanumeric_code
-                    - amount_paid
-                
-                TABLE IDENTIFICATION:
-                - Number tables sequentially from top to bottom: table 1, table 2, table 3, etc.
-                - A single image may contain multiple tables (1 to 3 tables per scan)
-                - Each table will have its own claim number
-
-                Before extracting data:
-                1. Identify every separate claim table on the page.
-                2. Count the tables.
-                3. Extract every table independently.
-                Do not merge information between tables.
-
-                OUTPUT FORMAT - Array of Claim Objects:
-                Return a JSON object with a top-level "claims" array. Each element in the array represents ONE complete claim object from ONE table. Do not add any additional keys, fields, explanations, or markdown formatting. Structure the JSON as follows:
-
-                {
-                    "claims": [
-                        {
-                            "claim_number": "X",
-                            "ada_codes": [
-                                {
-                                    "alphanumeric_code": "X",
-                                    "amount_paid": "X"
-                                }
-                            ]
-                        }
-                    ]
-                }
-
-
-                KEY REQUIREMENTS:
-                - Return ALL claims found in the image, each in its own object within the "claims" array
-                - If a field is blank or cannot be identified, report the field as null.
-                - Be specific and extract values exactly as they appear on the document. Do not infer uncertain values from unassociated rows, columns, or tables.
-                - There will be a specific column labeled "AMOUNT PAID". Find amount_paid there and nowhere else.
-                - The claim number will be the final string of digits in row 2, column 1 of any given claim table.
-                - If a claim appears to have no codes, do not include the claim in the final output.
-                - If the image appears to have no claims, return an empty "claims" array.
-                """
 
 #July 12; Created multiple claim objects per table; for united group
 #August 1; working prompt
