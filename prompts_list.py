@@ -1,23 +1,23 @@
 #July 11; first prompt
-#Nov 28; possibly working, needs testing and refinement. Check if payment includes patient additions.
+#Nov 28; possibly working, needs testing and refinement. Add patient name, alongside checks such as NOT doctor, NOT plan owner
 message_1_all = """
 You are tasked with analyzing this EOB (Explanation of Benefits) document and extracting all relevant claim data.
 The purpose of this task is to determine, for each individual claim, how much an insurance company paid, and what they paid it for. Payments are organized by ADA code within any claim.
-The company may pay by combining patient payment (such as a co-pay) with actual company payment. In any such cases, report company payment as the sum of all amounts currently paid.
-EOBs are structured in the following way: there will be an alphanumeric ADA Code (ex. D0270), alongside the amount the insurance company is willing to cover.
-Documents do not follow any structure besides what is stated above; however, there are a few general rules:
+The company may pay by combining patient payment (such as a co-pay) with any other payment. In any such cases, report company payment as the sum of all amounts currently paid.
+Payments are structured in the following way: there will be an alphanumeric ADA Code (ex. D0270), alongside the amount the insurance company has paid.
+EOB structure follows a few general rules:
 1. EOBs are often organized into three sections: a header, a body, and concluding notes
 2. The body of the document will almost always be organized into multiple tables.
 3. Any individual claim will usually be contained within either one entire table, or one singular row of a table.
-4. The amount the insurance company is willing to pay will fall near the end of a row. It will be directly below a label, found in row 1 labeled something similar to any of the following:
+4. The amount the insurance company has paid will fall near the end of a row. It will be directly below a label, found in row 1 labeled something similar to any of the following:
     - COVERED AMOUNT
     - PAID
     - AMOUNT ELIGIBLE FOR COVERAGE
     - PAYER PAID
     - X COMPANY PAYS
+    - PLAN PAYMENT
 Documents will have differing structures, so context clues must be used.
-If you cannot determine which column contains the amount paid by the company for any given code, compare with the other columns. The total paid for an entire claim will be the sum of all the code payments.
-
+There will often be a column labeled "Non Covered", and possibly another labeled "Patient Resp." Either of those columns represent money NOT yet paid, and should not be included in the sum for that code/claim.
 
 
 For each claim, extract:
@@ -27,10 +27,6 @@ For each claim, extract:
     - amount_paid
 - patient_name
 
-TABLE IDENTIFICATION:
-- Number tables sequentially from top to bottom: table 1, table 2, table 3, etc.
-- A single image may contain multiple tables (1 to 3 tables per scan)
-- Each table will have its own claim number
 
 Before extracting data:
 1. Identify every separate claim on the page.
